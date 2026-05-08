@@ -35,6 +35,49 @@ def load_data():
     return timeline_df, ratings_df, reviews_df, ranks_df
 
 
+def generate_ai_style_insights(kpis: dict) -> list[str]:
+    insights = []
+
+    avg_rank = kpis["avg_rank"]
+    best_rank = kpis["best_rank"]
+    worst_rank = kpis["worst_rank"]
+    avg_rating = kpis["avg_rating"]
+    negative_review_pct = kpis["negative_review_pct"]
+    top_topic = kpis["top_topic"]
+    update_count = kpis["update_count"]
+
+    if avg_rank <= 2:
+        insights.append(
+            f"MONOPOLY GO! demonstrates elite monetization performance, maintaining an average grossing rank of {avg_rank:.2f} and ranking between #{best_rank:.0f} and #{worst_rank:.0f}."
+        )
+
+    if avg_rating >= 4.5:
+        insights.append(
+            f"The application maintains strong cumulative user satisfaction with an average rating of {avg_rating:.2f}, despite concentrated negative feedback."
+        )
+
+    if negative_review_pct >= 80:
+        insights.append(
+            f"Negative reviews represent {negative_review_pct:.1f}% of the review dataset, suggesting either elevated user friction or a dataset skew toward critical feedback."
+        )
+
+    if top_topic:
+        insights.append(
+            f"The dominant complaint topic is '{top_topic}', indicating a strategic area to monitor after monetization changes and product releases."
+        )
+
+    if update_count >= 50:
+        insights.append(
+            f"The product released {update_count} version updates during the analyzed period, reinforcing evidence of an aggressive live-ops and optimization strategy."
+        )
+
+    insights.append(
+        "Recommendation: implement automated post-release monitoring for ranking movement, sentiment variation, and monetization-related complaints within 7 days after major releases."
+    )
+
+    return insights
+
+
 st.title("MONOPOLY GO! Strategy Dashboard")
 
 st.markdown(
@@ -51,7 +94,6 @@ except Exception as e:
     st.stop()
 
 
-# Debug / validation
 with st.expander("Dataset validation"):
     st.write("BASE_DIR:", BASE_DIR)
     st.write("EXPORTS_DIR:", EXPORTS_DIR)
@@ -63,20 +105,86 @@ with st.expander("Dataset validation"):
 
 # KPIs
 avg_rank = ranks_df["store_product_rank_grossing"].mean()
+best_rank = ranks_df["store_product_rank_grossing"].min()
+worst_rank = ranks_df["store_product_rank_grossing"].max()
+
 avg_rating = ratings_df["average_star_cumulative"].mean()
+
 review_count = len(reviews_df)
+
+negative_review_pct = (
+    reviews_df["review_sentiment"]
+    .value_counts(normalize=True)
+    .get("negative", 0) * 100
+)
+
 update_count = len(
     timeline_df[
         timeline_df["event_type_name"] == "new_version"
     ]
 )
 
+top_topic = (
+    reviews_df["topics"]
+    .value_counts()
+    .idxmax()
+)
+
+kpis = {
+    "avg_rank": avg_rank,
+    "best_rank": best_rank,
+    "worst_rank": worst_rank,
+    "avg_rating": avg_rating,
+    "review_count": review_count,
+    "negative_review_pct": negative_review_pct,
+    "update_count": update_count,
+    "top_topic": top_topic,
+}
+
+
 col1, col2, col3, col4 = st.columns(4)
 
-col1.metric("Average Grossing Rank", f"{avg_rank:.2f}")
-col2.metric("Average Rating", f"{avg_rating:.2f}")
-col3.metric("Total Reviews", f"{review_count:,}")
-col4.metric("App Updates", f"{update_count}")
+col1.metric(
+    "Average Grossing Rank",
+    f"{avg_rank:.2f}"
+)
+
+col2.metric(
+    "Best / Worst Rank",
+    f"#{best_rank:.0f} / #{worst_rank:.0f}"
+)
+
+col3.metric(
+    "Average Rating",
+    f"{avg_rating:.2f}"
+)
+
+col4.metric(
+    "Total Reviews",
+    f"{review_count:,}"
+)
+
+col5, col6, col7, col8 = st.columns(4)
+
+col5.metric(
+    "Negative Reviews",
+    f"{negative_review_pct:.1f}%"
+)
+
+col6.metric(
+    "App Updates",
+    f"{update_count}"
+)
+
+col7.metric(
+    "Top Complaint Topic",
+    top_topic
+)
+
+col8.metric(
+    "Platforms",
+    ranks_df["market_code"].nunique()
+)
 
 
 # Grossing Rank Trend
@@ -100,7 +208,7 @@ fig_rank.update_yaxes(autorange="reversed")
 
 st.plotly_chart(
     fig_rank,
-    use_container_width=True
+    width="stretch"
 )
 
 
@@ -123,7 +231,7 @@ fig_rating = px.line(
 
 st.plotly_chart(
     fig_rating,
-    use_container_width=True
+    width="stretch"
 )
 
 
@@ -147,7 +255,7 @@ fig_events = px.bar(
 
 st.plotly_chart(
     fig_events,
-    use_container_width=True
+    width="stretch"
 )
 
 
@@ -171,7 +279,7 @@ fig_sentiment = px.bar(
 
 st.plotly_chart(
     fig_sentiment,
-    use_container_width=True
+    width="stretch"
 )
 
 
@@ -203,7 +311,7 @@ fig_topics.update_layout(
 
 st.plotly_chart(
     fig_topics,
-    use_container_width=True
+    width="stretch"
 )
 
 
@@ -228,7 +336,7 @@ fig_platform_rank.update_yaxes(autorange="reversed")
 
 st.plotly_chart(
     fig_platform_rank,
-    use_container_width=True
+    width="stretch"
 )
 
 
@@ -258,8 +366,21 @@ for _, row in event_dates.iterrows():
 
 st.plotly_chart(
     fig_event_rank,
-    use_container_width=True
+    width="stretch"
 )
+
+
+# AI-Generated Executive Insights
+st.header("AI-Generated Executive Insights")
+
+st.caption(
+    "Generated from validated KPIs and cleaned datasets using rule-based executive reasoning."
+)
+
+ai_insights = generate_ai_style_insights(kpis)
+
+for insight in ai_insights:
+    st.markdown(f"- {insight}")
 
 
 # Executive Insights
@@ -294,7 +415,6 @@ st.markdown("""
 """)
 
 
-# Raw Data Preview
 with st.expander("Preview Raw Cleaned Data"):
     selected_dataset = st.selectbox(
         "Select dataset",
