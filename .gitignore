@@ -18,12 +18,6 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Generated exports
-exports/
-
-# Generated charts
-charts/
-
 # Raw datasets
 data/
 
