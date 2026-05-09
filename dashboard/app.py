@@ -116,8 +116,8 @@ def generate_ai_style_insights(kpis: dict) -> list[str]:
 
     if avg_rank <= 2:
         insights.append(
-            f"MONOPOLY GO! demonstrates elite monetization performance, maintaining an average grossing rank of {avg_rank:.2f} "
-            f"and ranking between #{best_rank:.0f} and #{worst_rank:.0f} on Google Play."
+            f"MONOPOLY GO! ranked **#1 in the Google Play Games category every single day** across the entire analysis period — "
+            f"and held the **#{best_rank:.0f}–#{worst_rank:.0f} position in the overall store** grossing chart."
         )
     if avg_rating >= 4.5:
         insights.append(
@@ -156,9 +156,22 @@ except Exception as e:
 
 
 # --- KPI calculations ---
-avg_rank = ranks_df["store_product_rank_grossing"].mean()
-best_rank = ranks_df["store_product_rank_grossing"].min()
-worst_rank = ranks_df["store_product_rank_grossing"].max()
+ranks_games   = ranks_df[ranks_df["category_id"] == "game"]
+ranks_overall = ranks_df[ranks_df["category_id"] == "all"]
+
+# Games category: #1 every day — express as % of days at #1
+games_days_at_1 = (ranks_games["store_product_rank_grossing"] == 1).mean() * 100
+
+# Overall store: varies between #2 and #3
+avg_rank_overall  = ranks_overall["store_product_rank_grossing"].mean()
+best_rank_overall = ranks_overall["store_product_rank_grossing"].min()
+worst_rank_overall = ranks_overall["store_product_rank_grossing"].max()
+
+# Used by AI insights (overall store avg is the meaningful moving number)
+avg_rank  = avg_rank_overall
+best_rank = best_rank_overall
+worst_rank = worst_rank_overall
+
 avg_rating = ratings_df["average_star_cumulative"].mean()
 review_count = len(reviews_df)
 negative_review_pct = (
@@ -222,8 +235,8 @@ tab_overview, tab_rankings, tab_reviews, tab_timeline = st.tabs([
 with tab_overview:
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.markdown(kpi_card("Avg Grossing Rank", f"{avg_rank:.2f}", "Google Play · Oct 2024 – Oct 2025"), unsafe_allow_html=True)
-    c2.markdown(kpi_card("Best / Worst Rank", f"#{best_rank:.0f} / #{worst_rank:.0f}", "Google Play range"), unsafe_allow_html=True)
+    c1.markdown(kpi_card("Games Category Rank", "#1", f"{games_days_at_1:.0f}% of days · Google Play"), unsafe_allow_html=True)
+    c2.markdown(kpi_card("Overall Store Rank", f"#{best_rank_overall:.0f} – #{worst_rank_overall:.0f}", f"Avg {avg_rank_overall:.2f} · Google Play grossing"), unsafe_allow_html=True)
     c3.markdown(kpi_card("Avg Rating", f"{avg_rating:.2f} ★", "iOS + Android cumulative"), unsafe_allow_html=True)
     c4.markdown(kpi_card("Total Reviews", f"{review_count:,}", "1-star only (API filter)"), unsafe_allow_html=True)
 
@@ -248,7 +261,7 @@ with tab_overview:
     st.markdown("""
 **Key Findings**
 
-- **MONOPOLY GO! maintained elite grossing performance on Google Play**, averaging a grossing rank of **1.46** and staying between **#1 and #3** throughout the period. Apple Store rank data was not available in this export.
+- **MONOPOLY GO! ranked #1 in the Google Play Games category every single day** of the analysis period (366/366 days). In the overall store grossing chart it held **#2–#3**, averaging **2.39**. Apple Store rank data was not available in this export.
 - **43 distinct version releases** across the analysis period reflect an aggressive live-ops and optimization strategy.
 - **Ratings remained stable** — iOS averaged **4.80 ★** and Android **4.66 ★** — despite concentrated critical review volume.
 - **November 2024 saw a review spike of 922 complaints** (vs. ~100–180/month baseline), coinciding with multiple version releases and likely monetization changes.
@@ -312,69 +325,82 @@ with tab_overview:
 # ============================================================
 with tab_rankings:
 
-    rank_trend = (
-        ranks_df
-        .groupby("date")["store_product_rank_grossing"]
-        .mean()
-        .reset_index()
+    # Build per-category rank series (one row per date per category — no averaging)
+    cat_labels = {
+        "game":       "Games Category",
+        "game_board": "Board Games Sub-category",
+        "all":        "Overall Store",
+    }
+    rank_by_cat = ranks_df.copy()
+    rank_by_cat["chart"] = rank_by_cat["category_id"].map(cat_labels)
+
+    # Shared y-axis config: integer ticks, inverted (#1 at top)
+    yaxis_rank = dict(
+        autorange="reversed",
+        tickmode="array",
+        tickvals=[1, 2, 3],
+        ticktext=["#1", "#2", "#3"],
+        title="Grossing Rank",
     )
 
-    st.subheader("Grossing Rank Over Time (Google Play)")
+    # --- Chart 1: all categories side by side ---
+    st.subheader("Daily Grossing Rank by Category — Google Play")
+    st.caption(
+        "Three chart types tracked simultaneously: Games Category, Board Games sub-category, "
+        "and Overall Store. MONOPOLY GO! held **#1 in both Games charts every day**; "
+        "Overall Store rank varied between **#2 and #3**."
+    )
 
-    fig_rank = px.line(
-        rank_trend,
+    fig_rank_cat = px.line(
+        rank_by_cat.sort_values("date"),
         x="date",
         y="store_product_rank_grossing",
-        title="Daily Grossing Rank — Google Play",
-        labels={"store_product_rank_grossing": "Rank", "date": "Date"}
+        color="chart",
+        line_shape="hv",
+        color_discrete_map={
+            "Games Category":            "#00897B",
+            "Board Games Sub-category":  "#26A69A",
+            "Overall Store":             "#FF7043",
+        },
+        title="Grossing Rank by Category — Google Play",
+        labels={"store_product_rank_grossing": "Rank", "date": "Date", "chart": "Category"}
     )
-    fig_rank.update_yaxes(autorange="reversed")
-    fig_rank.update_traces(line_color="#00897B")
-    st.plotly_chart(fig_rank, width="stretch")
+    fig_rank_cat.update_yaxes(**yaxis_rank)
+    fig_rank_cat.update_layout(legend=dict(orientation="h", y=-0.15))
+    st.plotly_chart(fig_rank_cat, width="stretch")
 
-    st.subheader("Grossing Rank vs Timeline Events")
-    st.caption("Dashed lines mark all app store events (version releases, metadata changes).")
+    # --- Chart 2: Overall store rank vs timeline events ---
+    st.subheader("Overall Store Rank vs Timeline Events")
+    st.caption(
+        "Overall Google Play grossing rank (across all apps). "
+        "Dashed lines mark version releases — use this to spot rank movement after updates."
+    )
+
+    overall_trend = (
+        ranks_overall
+        .sort_values("date")[["date", "store_product_rank_grossing"]]
+        .reset_index(drop=True)
+    )
 
     fig_event_rank = px.line(
-        rank_trend,
+        overall_trend,
         x="date",
         y="store_product_rank_grossing",
-        title="Grossing Rank with Timeline Event Context",
+        line_shape="hv",
+        title="Overall Store Grossing Rank with Version Release Context",
         labels={"store_product_rank_grossing": "Rank", "date": "Date"}
     )
-    fig_event_rank.update_yaxes(autorange="reversed")
-    fig_event_rank.update_traces(line_color="#00897B")
+    fig_event_rank.update_traces(line_color="#FF7043")
+    fig_event_rank.update_yaxes(**yaxis_rank)
 
-    for _, row in timeline_df[["date", "event_type_name"]].drop_duplicates().iterrows():
-        fig_event_rank.add_vline(
-            x=row["date"],
-            line_width=1,
-            line_dash="dash",
-            opacity=0.25
-        )
+    version_dates = (
+        timeline_df[timeline_df["event_type_name"] == "new_version"]["date"]
+        .drop_duplicates()
+    )
+    for d in version_dates:
+        fig_event_rank.add_vline(x=d, line_width=1, line_dash="dash", line_color="#00897B", opacity=0.35)
 
     st.plotly_chart(fig_event_rank, width="stretch")
-
-    st.subheader("Average Grossing Rank by Platform")
-    st.caption("Apple Store rank data was not available in this export.")
-
-    platform_rank = (
-        ranks_df
-        .groupby("market_code")["store_product_rank_grossing"]
-        .mean()
-        .reset_index()
-    )
-
-    fig_platform_rank = px.bar(
-        platform_rank,
-        x="market_code",
-        y="store_product_rank_grossing",
-        title="Average Grossing Rank by Platform (Google Play only)",
-        color_discrete_sequence=["#00897B"],
-        labels={"market_code": "Platform", "store_product_rank_grossing": "Avg Rank"}
-    )
-    fig_platform_rank.update_yaxes(autorange="reversed")
-    st.plotly_chart(fig_platform_rank, width="stretch")
 
     with st.expander("Preview raw ranks data"):
         st.dataframe(ranks_df.head(100))
