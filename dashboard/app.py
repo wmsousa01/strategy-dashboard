@@ -516,17 +516,100 @@ with tab_reviews:
         )
         col.caption(row["top_keywords"])
 
-    # ── Legend ─────────────────────────────────────────────────────────────
-    st.markdown(
-        "<div style='display:flex;gap:20px;padding:12px 0 4px;flex-wrap:wrap;'>"
-        "<span style='font-size:11px;color:#6b7280;'>Intensity zones:</span>"
-        "<span style='font-size:11px;'><span style='color:#22c55e;'>●</span>&nbsp;Mild (&lt;38)</span>"
-        "<span style='font-size:11px;'><span style='color:#eab308;'>●</span>&nbsp;Moderate (38–54)</span>"
-        "<span style='font-size:11px;'><span style='color:#f97316;'>●</span>&nbsp;Strong (55–71)</span>"
-        "<span style='font-size:11px;'><span style='color:#ef4444;'>●</span>&nbsp;Severe (≥72)</span>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
+    # ── Zone reference cards ────────────────────────────────────────────────
+    st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
+
+    ZONE_DEFS = [
+        {
+            "label":    "Mild",
+            "range":    "Score < 38",
+            "color":    "#22c55e",
+            "bg":       "#f0fdf4",
+            "border":   "#86efac",
+            "keywords": "soft language, nostalgic tone (\"used to\"), vague dissatisfaction",
+            "example":  (
+                "So during a team competition you take away my teammate and delete "
+                "his account. You guys couldn't have done this after the competition, "
+                "now I'm gonna lose."
+            ),
+        },
+        {
+            "label":    "Moderate",
+            "range":    "Score 38–54",
+            "color":    "#ca8a04",
+            "bg":       "#fefce8",
+            "border":   "#fde047",
+            "keywords": "rigged, cheat, unfair, impossible, waste, bad",
+            "example":  (
+                "I hit the 10,000 net worth mark and it said I'll get 3k rolls as a "
+                "reward. It never gave it to me — just said 'bank of monopoly.' "
+                "This game is trash and a scam."
+            ),
+        },
+        {
+            "label":    "Strong",
+            "range":    "Score 55–71",
+            "color":    "#ea580c",
+            "bg":       "#fff7ed",
+            "border":   "#fdba74",
+            "keywords": "pay to win/play, banned, scam, multiple exclamation marks",
+            "example":  (
+                "Money pit!!!! Just as bad as the pay to play clan games. "
+                "The ads are ridiculous. Don't play if you're expecting fair rewards."
+            ),
+        },
+        {
+            "label":    "Severe",
+            "range":    "Score ≥ 72",
+            "color":    "#dc2626",
+            "bg":       "#fef2f2",
+            "border":   "#fca5a5",
+            "keywords": "fraud, steal, ALL CAPS, rage punctuation (!!!!!!)",
+            "example":  (
+                "IF I COULD GIVE THIS GAME NEGATIVE TEN STARS, I WOULD!!!!!!! "
+                "IT IS THE MOST GREEDY RIP OFF OF A GAME THAT I HAVE EVER PLAYED!!!!!!"
+            ),
+        },
+    ]
+
+    zone_cols = st.columns(4)
+    for col, z in zip(zone_cols, ZONE_DEFS):
+        col.markdown(
+            f"<div style='"
+            f"background:{z['bg']};"
+            f"border:1px solid {z['border']};"
+            f"border-radius:8px;"
+            f"padding:12px 14px;"
+            f"height:100%;'>"
+
+            f"<div style='display:flex;align-items:center;gap:6px;margin-bottom:6px;'>"
+            f"<div style='width:12px;height:12px;border-radius:50%;"
+            f"background:{z['color']};flex-shrink:0;'></div>"
+            f"<span style='font-size:13px;font-weight:700;color:{z['color']};'>"
+            f"{z['label']}</span>"
+            f"<span style='font-size:10px;color:#9ca3af;margin-left:auto;'>"
+            f"{z['range']}</span>"
+            f"</div>"
+
+            f"<div style='font-size:10px;color:#6b7280;margin-bottom:8px;'>"
+            f"<strong>Signal keywords:</strong> {z['keywords']}</div>"
+
+            f"<div style='"
+            f"background:white;"
+            f"border-left:3px solid {z['color']};"
+            f"border-radius:0 4px 4px 0;"
+            f"padding:8px 10px;"
+            f"font-size:11px;"
+            f"color:#374151;"
+            f"font-style:italic;'>"
+            f"&ldquo;{z['example']}&rdquo;"
+            f"</div>"
+
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
     # ── Stacked distribution chart ─────────────────────────────────────────
     st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
