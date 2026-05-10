@@ -481,56 +481,52 @@ with tab_reviews:
     scored_reviews["year_month"] = reviews_df["year_month"]
     monthly = monthly_summary(scored_reviews)
 
-    # ── HTML thermometers ──────────────────────────────────────────────────
-    def _thermometer(row) -> str:
-        ps = row["pct_severe"]
-        pg = row["pct_strong"]
-        pm = row["pct_moderate"]
-        pl = row["pct_mild"]
-        _, bulb_color = sentiment_label(row["avg_score"])
-        month_abbr = pd.to_datetime(row["year_month"]).strftime("%b\n%Y")
-        return f"""
-        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:80px;">
-            <span style="font-size:10px;color:#6b7280;text-align:center;
-                         font-weight:600;white-space:pre-line;">{month_abbr}</span>
-            <div style="width:22px;height:140px;border-radius:11px;overflow:hidden;
-                        border:1px solid #e4e4e7;display:flex;flex-direction:column;">
-                <div style="flex:{ps};background:#ef4444;min-height:0;"></div>
-                <div style="flex:{pg};background:#f97316;min-height:0;"></div>
-                <div style="flex:{pm};background:#eab308;min-height:0;"></div>
-                <div style="flex:{pl};background:#22c55e;min-height:0;"></div>
-            </div>
-            <div style="width:30px;height:30px;border-radius:50%;
-                        background:{bulb_color};border:2px solid white;
-                        box-shadow:0 0 0 1px {bulb_color};"></div>
-            <span style="font-size:11px;font-weight:700;color:{bulb_color};">
-                {row['avg_score']:.1f}
-            </span>
-            <span style="font-size:9px;color:#9ca3af;">{row['review_count']:,} reviews</span>
-            <span style="font-size:9px;color:#6b7280;text-align:center;max-width:78px;">
-                {row['top_keywords']}
-            </span>
-        </div>
-        """
+    # ── Thermometers via st.columns (one column per month) ─────────────────
+    thermo_cols = st.columns(len(monthly))
 
-    thermometer_html = (
-        '<div style="display:flex;gap:16px;align-items:flex-end;'
-        'padding:16px 0 8px;flex-wrap:wrap;">'
-        + "".join(_thermometer(r) for _, r in monthly.iterrows())
-        + "</div>"
-    )
-    st.markdown(thermometer_html, unsafe_allow_html=True)
+    for col, (_, row) in zip(thermo_cols, monthly.iterrows()):
+        month_str  = pd.to_datetime(row["year_month"]).strftime("%b %Y")
+        _, bulb_color = sentiment_label(row["avg_score"])
+        ps = f"{row['pct_severe']:.1f}"
+        pg = f"{row['pct_strong']:.1f}"
+        pm = f"{row['pct_moderate']:.1f}"
+        pl = f"{row['pct_mild']:.1f}"
+
+        col.markdown(
+            f"<div style='text-align:center;font-size:11px;"
+            f"font-weight:600;color:#374151;margin-bottom:6px;'>{month_str}</div>",
+            unsafe_allow_html=True,
+        )
+        col.markdown(
+            f"<div style='display:flex;flex-direction:column;align-items:center;gap:4px;'>"
+            f"<div style='width:22px;height:130px;border-radius:11px;overflow:hidden;"
+            f"border:1px solid #e4e4e7;display:flex;flex-direction:column;'>"
+            f"<div style='flex:{ps};background:#ef4444;min-height:0;'></div>"
+            f"<div style='flex:{pg};background:#f97316;min-height:0;'></div>"
+            f"<div style='flex:{pm};background:#eab308;min-height:0;'></div>"
+            f"<div style='flex:{pl};background:#22c55e;min-height:0;'></div>"
+            f"</div>"
+            f"<div style='width:26px;height:26px;border-radius:50%;"
+            f"background:{bulb_color};margin-top:2px;'></div>"
+            f"<span style='font-size:12px;font-weight:700;color:{bulb_color};'>"
+            f"{row['avg_score']:.1f}</span>"
+            f"<span style='font-size:9px;color:#9ca3af;'>{row['review_count']:,} rev</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+        col.caption(row["top_keywords"])
 
     # ── Legend ─────────────────────────────────────────────────────────────
-    st.markdown("""
-    <div style="display:flex;gap:16px;padding:8px 0 0;flex-wrap:wrap;">
-        <span style="font-size:11px;color:#6b7280;">Intensity zones:</span>
-        <span style="font-size:11px;"><span style="color:#22c55e;">●</span>&nbsp;Mild (&lt;38)</span>
-        <span style="font-size:11px;"><span style="color:#eab308;">●</span>&nbsp;Moderate (38–54)</span>
-        <span style="font-size:11px;"><span style="color:#f97316;">●</span>&nbsp;Strong (55–71)</span>
-        <span style="font-size:11px;"><span style="color:#ef4444;">●</span>&nbsp;Severe (≥72)</span>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        "<div style='display:flex;gap:20px;padding:12px 0 4px;flex-wrap:wrap;'>"
+        "<span style='font-size:11px;color:#6b7280;'>Intensity zones:</span>"
+        "<span style='font-size:11px;'><span style='color:#22c55e;'>●</span>&nbsp;Mild (&lt;38)</span>"
+        "<span style='font-size:11px;'><span style='color:#eab308;'>●</span>&nbsp;Moderate (38–54)</span>"
+        "<span style='font-size:11px;'><span style='color:#f97316;'>●</span>&nbsp;Strong (55–71)</span>"
+        "<span style='font-size:11px;'><span style='color:#ef4444;'>●</span>&nbsp;Severe (≥72)</span>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
     # ── Stacked distribution chart ─────────────────────────────────────────
     st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
