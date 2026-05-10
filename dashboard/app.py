@@ -1,7 +1,14 @@
+import base64
+import sys
+from pathlib import Path
+
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
-from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from sentiment import score_dataframe, monthly_summary, sentiment_label
 
 
 st.set_page_config(
@@ -68,6 +75,14 @@ st.markdown("""
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 EXPORTS_DIR = BASE_DIR / "exports"
+ICON_PATH = Path(__file__).resolve().parent / "assets" / "icon.png"
+
+
+def _icon_html() -> str:
+    if ICON_PATH.exists():
+        data = base64.b64encode(ICON_PATH.read_bytes()).decode()
+        return f'<img src="data:image/png;base64,{data}" style="width:72px;height:72px;border-radius:16px;object-fit:cover;">'
+    return '<div style="font-size:48px;line-height:1;">🎲</div>'
 
 
 @st.cache_data
@@ -204,7 +219,7 @@ date_max = ratings_df["date"].max().strftime("%b %d, %Y")
 st.markdown(f"""
 <div class="app-header">
     <div style="display:flex; align-items:flex-start; gap:16px;">
-        <div style="font-size:48px; line-height:1;">🎲</div>
+        {_icon_html()}
         <div>
             <div class="app-name">MONOPOLY GO!</div>
             <div class="app-meta">Scopely, Inc. &nbsp;·&nbsp; Games &nbsp;·&nbsp; US Market</div>
@@ -451,6 +466,103 @@ with tab_reviews:
     )
     fig_rating.update_traces(line_color="#00897B")
     st.plotly_chart(fig_rating, width="stretch")
+
+    st.markdown("---")
+
+    # ── Sentiment Thermometer ─────────────────────────────────────────────
+    st.subheader("Sentiment Intensity Thermometer")
+    st.caption(
+        "Keyword-based analysis of 1-star review content. "
+        "Each thermometer shows the monthly mix of criticism intensity: "
+        "green = mild, yellow = moderate, orange = strong, red = severe."
+    )
+
+    scored_reviews = score_dataframe(reviews_df)
+    scored_reviews["year_month"] = reviews_df["year_month"]
+    monthly = monthly_summary(scored_reviews)
+
+    # ── HTML thermometers ──────────────────────────────────────────────────
+    def _thermometer(row) -> str:
+        ps = row["pct_severe"]
+        pg = row["pct_strong"]
+        pm = row["pct_moderate"]
+        pl = row["pct_mild"]
+        _, bulb_color = sentiment_label(row["avg_score"])
+        month_abbr = pd.to_datetime(row["year_month"]).strftime("%b\n%Y")
+        return f"""
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:80px;">
+            <span style="font-size:10px;color:#6b7280;text-align:center;
+                         font-weight:600;white-space:pre-line;">{month_abbr}</span>
+            <div style="width:22px;height:140px;border-radius:11px;overflow:hidden;
+                        border:1px solid #e4e4e7;display:flex;flex-direction:column;">
+                <div style="flex:{ps};background:#ef4444;min-height:0;"></div>
+                <div style="flex:{pg};background:#f97316;min-height:0;"></div>
+                <div style="flex:{pm};background:#eab308;min-height:0;"></div>
+                <div style="flex:{pl};background:#22c55e;min-height:0;"></div>
+            </div>
+            <div style="width:30px;height:30px;border-radius:50%;
+                        background:{bulb_color};border:2px solid white;
+                        box-shadow:0 0 0 1px {bulb_color};"></div>
+            <span style="font-size:11px;font-weight:700;color:{bulb_color};">
+                {row['avg_score']:.1f}
+            </span>
+            <span style="font-size:9px;color:#9ca3af;">{row['review_count']:,} reviews</span>
+            <span style="font-size:9px;color:#6b7280;text-align:center;max-width:78px;">
+                {row['top_keywords']}
+            </span>
+        </div>
+        """
+
+    thermometer_html = (
+        '<div style="display:flex;gap:16px;align-items:flex-end;'
+        'padding:16px 0 8px;flex-wrap:wrap;">'
+        + "".join(_thermometer(r) for _, r in monthly.iterrows())
+        + "</div>"
+    )
+    st.markdown(thermometer_html, unsafe_allow_html=True)
+
+    # ── Legend ─────────────────────────────────────────────────────────────
+    st.markdown("""
+    <div style="display:flex;gap:16px;padding:8px 0 0;flex-wrap:wrap;">
+        <span style="font-size:11px;color:#6b7280;">Intensity zones:</span>
+        <span style="font-size:11px;"><span style="color:#22c55e;">●</span>&nbsp;Mild (&lt;38)</span>
+        <span style="font-size:11px;"><span style="color:#eab308;">●</span>&nbsp;Moderate (38–54)</span>
+        <span style="font-size:11px;"><span style="color:#f97316;">●</span>&nbsp;Strong (55–71)</span>
+        <span style="font-size:11px;"><span style="color:#ef4444;">●</span>&nbsp;Severe (≥72)</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Stacked distribution chart ─────────────────────────────────────────
+    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+
+    dist_fig = go.Figure()
+    for zone, color in [
+        ("pct_severe",   "#ef4444"),
+        ("pct_strong",   "#f97316"),
+        ("pct_moderate", "#eab308"),
+        ("pct_mild",     "#22c55e"),
+    ]:
+        label_map = {
+            "pct_severe": "Severe", "pct_strong": "Strong",
+            "pct_moderate": "Moderate", "pct_mild": "Mild"
+        }
+        dist_fig.add_trace(go.Bar(
+            name=label_map[zone],
+            x=monthly["year_month"],
+            y=monthly[zone],
+            marker_color=color,
+            hovertemplate="%{y:.1f}%<extra>" + label_map[zone] + "</extra>",
+        ))
+
+    dist_fig.update_layout(
+        barmode="stack",
+        title="Sentiment Intensity Distribution by Month (%)",
+        yaxis_title="% of Reviews",
+        xaxis_title="Month",
+        legend=dict(orientation="h", y=-0.2),
+        height=320,
+    )
+    st.plotly_chart(dist_fig, width="stretch")
 
     st.markdown("---")
 
